@@ -185,6 +185,8 @@ func build(c ChainResponseJSON) error {
 		panic(err)
 	}
 
+	_ = os.RemoveAll("build") // Ignore because it is not super important
+
 	cmdName := "make"
 	cmdArgs := []string{"build"}
 	overridePath := "../../override-build-files/" + c.ChainName + ".sh"

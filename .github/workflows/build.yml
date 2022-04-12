@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    concurrency: build
+    concurrency: build-${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -26,7 +26,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: builddir/release-builds
-          key: release-builds-1 #Change whenever invalidation is needed
+          key: release-builds-2 #Change whenever invalidation is needed
 
       - name: run script
         run: mkdir -p builddir && cd builddir && cosmos-cli-builder
