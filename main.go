@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -191,54 +192,47 @@ func build(c ChainResponseJSON) error {
 		fmt.Println("Found override for " + c.ChainName)
 		cmdName = overridePath
 		cmdArgs = []string{}
-	} else {
-		if err != nil {
-			pwd, _ := os.Getwd()
-			fmt.Println(pwd)
-			fmt.Println(err.Error())
-		}
-		fmt.Println("No override found at " + overridePath)
 	}
 
-	for o, as := range targets {
-		for _, a := range as {
-			if isBuilt(c.DaemonName, o, a, c.Codebase.RecommendedVersion) {
-				fmt.Printf("%s %s (%s, %s) exists, skipping\n", c.ChainName, c.Codebase.RecommendedVersion, o, a)
-				continue
-			}
-			fmt.Printf("Building %s %s (%s, %s)\n", c.ChainName, c.Codebase.RecommendedVersion, o, a)
+	goos := runtime.GOOS
+	archs := targets[goos]
+	for _, arch := range archs {
+		if isBuilt(c.DaemonName, goos, arch, c.Codebase.RecommendedVersion) {
+			fmt.Printf("%s %s (%s, %s) exists, skipping\n", c.ChainName, c.Codebase.RecommendedVersion, goos, arch)
+			continue
+		}
+		fmt.Printf("Building %s %s (%s, %s)\n", c.ChainName, c.Codebase.RecommendedVersion, goos, arch)
 
-			cmd := exec.Command(cmdName, cmdArgs...)
-			cmd.Env = os.Environ()
-			cmd.Env = append(cmd.Env, "GOOS="+o)
-			cmd.Env = append(cmd.Env, "GOARCH="+a)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err := cmd.Run()
-			if err != nil {
-				fmt.Printf("build failed for %s\n (%s, %s)\n", c.ChainName, o, a)
-				continue
-			}
+		cmd := exec.Command(cmdName, cmdArgs...)
+		cmd.Env = os.Environ()
+		cmd.Env = append(cmd.Env, "GOOS="+goos)
+		cmd.Env = append(cmd.Env, "GOARCH="+arch)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		if err != nil {
+			fmt.Printf("build failed for %s\n (%s, %s)\n", c.ChainName, goos, arch)
+			continue
+		}
 
-			files, err := ioutil.ReadDir("./build")
-			if err != nil {
-				panic(err)
-			}
-			if len(files) != 1 {
-				panic(errors.New("Expected exactly one binary to be found"))
-			}
+		files, err := ioutil.ReadDir("./build")
+		if err != nil {
+			panic(err)
+		}
+		if len(files) != 1 {
+			panic(errors.New("Expected exactly one binary to be found"))
+		}
 
-			fn := files[0].Name()
-			ext := filepath.Ext(fn)
-			newName := fmt.Sprintf("%s-%s-%s-%s%s", c.DaemonName, o, a, c.Codebase.RecommendedVersion, ext)
-			newPath := "../release-builds/" + newName
-			fmt.Println("fn", fn)
-			fmt.Println("ext", ext)
-			fmt.Println("newName", newName)
-			fmt.Println("newPath", newPath)
-			if err := os.Rename("./build/"+fn, newPath); err != nil {
-				panic(err)
-			}
+		fn := files[0].Name()
+		ext := filepath.Ext(fn)
+		newName := fmt.Sprintf("%s-%s-%s-%s%s", c.DaemonName, goos, arch, c.Codebase.RecommendedVersion, ext)
+		newPath := "../release-builds/" + newName
+		fmt.Println("fn", fn)
+		fmt.Println("ext", ext)
+		fmt.Println("newName", newName)
+		fmt.Println("newPath", newPath)
+		if err := os.Rename("./build/"+fn, newPath); err != nil {
+			panic(err)
 		}
 	}
 
