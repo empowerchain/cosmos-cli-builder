@@ -21,8 +21,6 @@ jobs:
 
       - name: log in to github
         run: gh auth login
-        env:
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
       - name: build script
         run: go install
