@@ -12,8 +12,36 @@ import (
 	"strings"
 )
 
-var goos = []string{"linux", "darwin", "windows"}
-var goarch = []string{"amd64", "arm64"}
+var chainsToInclude = map[string]bool{
+	"agoric":         true,
+	"akash":          true,
+	"bitsong":        true,
+	"bostrom":        true,
+	"cerberus":       true,
+	"cheqd":          true,
+	"cosmoshub":      true,
+	"cryptoorgchain": true,
+	"desmos":         true,
+	"fetchhub":       true,
+	"gravitybridge":  true,
+	"juno":           true,
+	"lumnetwork":     true,
+	"osmosis":        true,
+	"persistence":    true,
+	"regen":          true,
+	"rizon":          true,
+	"secretnetwork":  true,
+	"sentinel":       true,
+	"stargaze":       true,
+	"terra":          true,
+	"umee":           true,
+}
+
+var targets = map[string][]string{
+	"linux":   {"amd64"},
+	"darwin":  {"amd64", "arm64"},
+	"windows": {"amd64"},
+}
 
 type GetAllChainsResponseJSON struct {
 	Chains []struct {
@@ -56,6 +84,10 @@ func main() {
 	}
 
 	for _, c := range chainsRes.Chains {
+		if !chainsToInclude[c.ChainName] {
+			continue
+		}
+
 		cjson, err := getSingleChain(c.ChainName)
 		if err != nil {
 			fmt.Println(err.Error())
@@ -143,8 +175,8 @@ func build(c ChainResponseJSON) error {
 		cmdArgs = []string{}
 	}
 
-	for _, o := range goos {
-		for _, a := range goarch {
+	for o, as := range targets {
+		for _, a := range as {
 			if isBuilt(c.DaemonName, o, a, c.Codebase.RecommendedVersion) {
 				fmt.Printf("%s %s (%s, %s) exists, skipping\n", c.ChainName, c.Codebase.RecommendedVersion, o, a)
 				continue
