@@ -1,0 +1,35 @@
+name: Build CLI
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: earthly/actions/setup-earthly@v1
+        with:
+          version: v0.6.13
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.17' 
+
+      - name: build script
+        run: go install
+
+      - name: run script
+        run: mkdir builddir && cd builddir && cosmos-cli-builder
+
+      - name: Release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: false
+          title: "Latest release"
+          files: ./builddir/release-builds/*

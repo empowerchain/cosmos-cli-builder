@@ -1,0 +1,208 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+var goos = []string{"linux", "darwin", "windows"}
+var goarch = []string{"amd64", "arm64"}
+
+type GetAllChainsResponseJSON struct {
+	Chains []struct {
+		ChainName string `json:"chain_name"`
+	} `json:"chains"`
+}
+
+type GetSingleChainResponseJSON struct {
+	Chain ChainResponseJSON `json:"chain"`
+}
+
+type ChainResponseJSON struct {
+	ChainName  string       `json:"chain_name"`
+	Codebase   CodebaseJSON `json:"codebase"`
+	DaemonName string       `json:"daemon_name"`
+}
+
+type CodebaseJSON struct {
+	GitRepo            string `json:"git_repo"`
+	RecommendedVersion string `json:"recommended_version"`
+}
+
+const url = "https://chains.cosmos.directory/"
+
+func main() {
+	allRes, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	defer allRes.Body.Close()
+
+	if allRes.StatusCode != 200 {
+		panic("Status code was not 200")
+	}
+
+	chainsRes := GetAllChainsResponseJSON{}
+	err = json.NewDecoder(allRes.Body).Decode(&chainsRes)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, c := range chainsRes.Chains {
+		cjson, err := getSingleChain(c.ChainName)
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+
+		if cjson.Chain.Codebase.GitRepo == "" {
+			fmt.Printf("No git repo found for %s\n", c.ChainName)
+			continue
+		}
+
+		if cjson.Chain.DaemonName == "" {
+			fmt.Printf("No daemon name found for %s\n", c.ChainName)
+			continue
+		}
+
+		if err := clone(cjson.Chain); err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+
+		if err := build(cjson.Chain); err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+	}
+}
+
+func getSingleChain(chainName string) (GetSingleChainResponseJSON, error) {
+	cRes, err := http.Get(url + chainName)
+	if err != nil {
+		panic(err)
+	}
+	defer cRes.Body.Close()
+
+	if cRes.StatusCode != 200 {
+		return GetSingleChainResponseJSON{}, errors.New(fmt.Sprintf("Something went wrong getting %s with code %d\n", url+chainName, cRes.StatusCode))
+	}
+
+	cjson := GetSingleChainResponseJSON{}
+	err = json.NewDecoder(cRes.Body).Decode(&cjson)
+	if err != nil {
+		panic(err)
+	}
+
+	return cjson, nil
+}
+
+func clone(c ChainResponseJSON) error {
+	if c.Codebase.RecommendedVersion == "" {
+		return errors.New(fmt.Sprintf("No recommended version found for %s\n", c.ChainName))
+	}
+
+	if _, err := os.Stat(c.ChainName); os.IsNotExist(err) {
+		gitURI := strings.TrimSuffix(strings.TrimSuffix(c.Codebase.GitRepo, "/"), ".git") + ".git"
+		cmd := exec.Command("gh", "repo", "clone", gitURI, c.ChainName, "--", "-b", c.Codebase.RecommendedVersion)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err = cmd.Run()
+		if err != nil {
+			return errors.New(fmt.Sprintf("git clone failed for %s (%s)\n", c.ChainName, gitURI))
+		}
+	}
+
+	return nil
+}
+
+func build(c ChainResponseJSON) error {
+	if _, err := os.Stat("release-builds"); os.IsNotExist(err) {
+		if err := os.Mkdir("release-builds", 0775); err != nil {
+			return err
+		}
+	}
+
+	if err := os.Chdir(c.ChainName); err != nil {
+		return err
+	}
+
+	cmdName := "make"
+	cmdArgs := []string{"build"}
+	overridePath := "../../override-build-files/" + c.ChainName + ".sh"
+	if _, err := os.Stat(overridePath); !os.IsNotExist(err) {
+		fmt.Println("Found override for " + c.ChainName)
+		cmdName = overridePath
+		cmdArgs = []string{}
+	}
+
+	for _, o := range goos {
+		for _, a := range goarch {
+			if isBuilt(c.DaemonName, o, a, c.Codebase.RecommendedVersion) {
+				fmt.Printf("%s %s (%s, %s) exists, skipping\n", c.ChainName, c.Codebase.RecommendedVersion, o, a)
+				continue
+			}
+			fmt.Printf("Building %s %s (%s, %s)\n", c.ChainName, c.Codebase.RecommendedVersion, o, a)
+
+			cmd := exec.Command(cmdName, cmdArgs...)
+			cmd.Env = os.Environ()
+			cmd.Env = append(cmd.Env, "GOOS="+o)
+			cmd.Env = append(cmd.Env, "GOARCH="+a)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				fmt.Printf("build failed for %s\n (%s, %s)\n", c.ChainName, o, a)
+				continue
+			}
+
+			files, err := ioutil.ReadDir("./build")
+			if err != nil {
+				return err
+			}
+			if len(files) != 1 {
+				return errors.New("Expected exactly one binary to be found")
+			}
+
+			fn := files[0].Name()
+			ext := filepath.Ext(fn)
+			newName := fmt.Sprintf("%s-%s-%s-%s%s", c.DaemonName, o, a, c.Codebase.RecommendedVersion, ext)
+			newPath := "../release-builds/" + newName
+			fmt.Println("fn", fn)
+			fmt.Println("ext", ext)
+			fmt.Println("newName", newName)
+			fmt.Println("newPath", newPath)
+			if err := os.Rename("./build/"+fn, newPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := os.Chdir(".."); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func isBuilt(daemon string, o string, a string, version string) bool {
+	files, err := ioutil.ReadDir("../release-builds")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), fmt.Sprintf("%s-%s-%s-%s", daemon, o, a, version)) {
+			return true
+		}
+	}
+
+	return false
+}
