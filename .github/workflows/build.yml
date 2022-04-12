@@ -54,5 +54,5 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: latest-${{ matrix.os }}
           prerelease: false
-          title: "Latest release"
+          title: "Latest release for ${{ matrix.os }}"
           files: ./builddir/release-builds/*
