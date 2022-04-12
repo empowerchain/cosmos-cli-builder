@@ -7,7 +7,7 @@ on:
 
 jobs:
   test-build:
-    runs-on: macos-11
+    runs-on: macos-latest
     steps:
       - uses: actions/setup-go@v3
         with:
@@ -23,6 +23,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    concurrency: build
     steps:
       - uses: actions/checkout@v3
 
