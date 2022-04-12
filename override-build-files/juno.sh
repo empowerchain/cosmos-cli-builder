@@ -1,5 +1,5 @@
 #!/bin/bash
 
 mkdir -p build
-make build
+make build -B
 mv ./bin/junod ./build
