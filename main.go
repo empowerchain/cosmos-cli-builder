@@ -12,6 +12,19 @@ import (
 	"strings"
 )
 
+var overrides = map[string]*GetSingleChainResponseJSON{
+	"juno": {
+		Chain: ChainResponseJSON{
+			ChainName:  "juno",
+			DaemonName: "junod",
+			Codebase: CodebaseJSON{
+				GitRepo:            "https://github.com/CosmosContracts/juno",
+				RecommendedVersion: "v3.1.0",
+			},
+		},
+	},
+}
+
 var chainsToInclude = map[string]bool{
 	"agoric":         true,
 	"akash":          true,
@@ -117,6 +130,11 @@ func main() {
 }
 
 func getSingleChain(chainName string) (GetSingleChainResponseJSON, error) {
+	override, ok := overrides[chainName]
+	if ok && override != nil {
+		return *override, nil
+	}
+
 	cRes, err := http.Get(url + chainName)
 	if err != nil {
 		panic(err)
@@ -158,12 +176,12 @@ func clone(c ChainResponseJSON) error {
 func build(c ChainResponseJSON) error {
 	if _, err := os.Stat("release-builds"); os.IsNotExist(err) {
 		if err := os.Mkdir("release-builds", 0775); err != nil {
-			return err
+			panic(err)
 		}
 	}
 
 	if err := os.Chdir(c.ChainName); err != nil {
-		return err
+		panic(err)
 	}
 
 	cmdName := "make"
@@ -173,6 +191,13 @@ func build(c ChainResponseJSON) error {
 		fmt.Println("Found override for " + c.ChainName)
 		cmdName = overridePath
 		cmdArgs = []string{}
+	} else {
+		if err != nil {
+			pwd, _ := os.Getwd()
+			fmt.Println(pwd)
+			fmt.Println(err.Error())
+		}
+		fmt.Println("No override found at " + overridePath)
 	}
 
 	for o, as := range targets {
@@ -197,10 +222,10 @@ func build(c ChainResponseJSON) error {
 
 			files, err := ioutil.ReadDir("./build")
 			if err != nil {
-				return err
+				panic(err)
 			}
 			if len(files) != 1 {
-				return errors.New("Expected exactly one binary to be found")
+				panic(errors.New("Expected exactly one binary to be found"))
 			}
 
 			fn := files[0].Name()
@@ -212,13 +237,13 @@ func build(c ChainResponseJSON) error {
 			fmt.Println("newName", newName)
 			fmt.Println("newPath", newPath)
 			if err := os.Rename("./build/"+fn, newPath); err != nil {
-				return err
+				panic(err)
 			}
 		}
 	}
 
 	if err := os.Chdir(".."); err != nil {
-		return err
+		panic(err)
 	}
 
 	return nil
