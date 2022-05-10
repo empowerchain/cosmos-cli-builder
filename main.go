@@ -20,7 +20,17 @@ var overrides = map[string]*GetSingleChainResponseJSON{
 			DaemonName: "junod",
 			Codebase: CodebaseJSON{
 				GitRepo:            "https://github.com/CosmosContracts/juno",
-				RecommendedVersion: "v3.1.0",
+				RecommendedVersion: "v5.0.1",
+			},
+		},
+	},
+	"sentinel": {
+		Chain: ChainResponseJSON{
+			ChainName:  "sentinel",
+			DaemonName: "sentinelhub",
+			Codebase: CodebaseJSON{
+				GitRepo:            "https://github.com/sentinel-official/hub",
+				RecommendedVersion: "v0.9.2",
 			},
 		},
 	},
