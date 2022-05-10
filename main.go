@@ -40,7 +40,7 @@ var chainsToInclude = map[string]bool{
 	"gravitybridge":  true,
 	"juno":           true,
 	"lumnetwork":     true,
-	"osmosis":        true,
+	"osmosis":        false,
 	"persistence":    true,
 	"regen":          true,
 	"rizon":          true,
