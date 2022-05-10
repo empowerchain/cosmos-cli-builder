@@ -26,7 +26,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: builddir/release-builds
-          key: release-builds-${{ matrix.os }}-2 #Change whenever invalidation is needed
+          key: release-builds-${{ matrix.os }}-3 #Change whenever invalidation is needed
 
       - name: run script
         run: mkdir -p builddir && cd builddir && cosmos-cli-builder
